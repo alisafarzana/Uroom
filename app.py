@@ -6,6 +6,8 @@ import os
 import subprocess
 import pandas as pd
 import streamlit as st
+import re
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 st.set_page_config(page_title="URoom", page_icon="🏫", layout="wide")
 st.markdown(
@@ -33,9 +35,11 @@ BACKEND = ROOT / (
 
 SOURCE = ROOT / "backend.cpp"
 
+BOOKINGS_FILE = ROOT / "bookings.csv"
+
 COMPARISON_DATA = (
     ROOT
-    / "uroom_algorithm_comparison_dataset.csv"
+    / "dataset_graph.csv"
 )
 
 SLOTS = [
@@ -56,7 +60,12 @@ LOCATIONS = [
     "Nadi@UTP",
     "Pocket D",
     "Village 1",
+    "Village 2",
+    "Village 3",
+    "Village 4",
     "Village 5",
+    "Village 6",
+    "Village 7",
 ]
 PREFERRED = [
     "Any location",
@@ -115,6 +124,7 @@ def search_rooms(pax: int, day: str, slot: str, start: str, preferred: str):
             "" if slot == "Any available time" else slot,
             start,
             preferred,
+            str(BOOKINGS_FILE),
         ]
     )
     metadata = {"candidate": 0, "total": 0}
@@ -145,15 +155,15 @@ def search_rooms(pax: int, day: str, slot: str, start: str, preferred: str):
 
 def get_schedule(room_id: str, day: str):
     output = []
-    for line in call_backend(["schedule", room_id, day]):
+    for line in call_backend(["schedule", room_id, day, str(BOOKINGS_FILE)]):
         parts = line.split("|")
         if parts[0] == "SLOT":
             output.append({"slot": parts[1], "status": parts[2], "label": parts[3]})
     return output
 
 
-def book_room(room_id: str, day: str, slot: str) -> str:
-    lines = call_backend(["book", room_id, day, slot])
+def book_room(room_id: str, day: str, slot: str, name: str,email: str,title: str,description: str,) -> str:
+    lines = call_backend(["book", room_id, day, slot, str(BOOKINGS_FILE), name, email, title, description])
     if lines and lines[0].startswith("OK|"):
         return lines[0].split("|", 1)[1]
     raise RuntimeError("Booking was not confirmed.")
@@ -227,19 +237,24 @@ for key, default in {
     "results": [],
     "meta": {},
     "show_schedule": False,
+    "show_booking_form": False,
+    "booking_room_id": None,
+    "booking_slot": None,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
 
+
+# USER INTERFACE
 st.markdown(
     '<b style="font-size:1.4rem">🏫 URoom</b>',
     unsafe_allow_html=True,
 )
 st.markdown(
     '<div style="height:24px"></div>'
-    '<div class="eyebrow">UTP student facility prototype</div>'
+    '<div class="eyebrow">UTP Room Booking</div>'
     '<div class="hero">'
-    'Find available study rooms based on your booking preferences.'
+    'Find available rooms based on your booking preferences.'
     '</div>',
     unsafe_allow_html=True,
 )
@@ -254,7 +269,7 @@ st.markdown(
 with st.form("search"):
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        pax = st.number_input("Number of pax *", 1, 100, 20)
+        pax = st.number_input("Number of pax *", 1, 100, 1)
     with c2:
         day = st.date_input("Booking date *", date.today(), min_value=date.today())
     with c3:
@@ -312,6 +327,7 @@ if st.session_state.query:
             "Room ID",
             "Distance",
             "Score",
+            "Extra seats"
         }
 
         display = [
@@ -366,21 +382,92 @@ if st.session_state.query:
 
                 left, right = st.columns(2)
 
-                with left:
-                    if query["slot"] != "Any available time":
-                        if st.button(
-                            "Book Room",
+                if (
+                    st.session_state.show_booking_form
+                    and st.session_state.booking_room_id == room_id
+                ):
+                    st.divider()
+                    st.subheader("Student booking details")
+
+                    st.caption(
+                        f"Room: {selected_room['Room']} · "
+                        f"Date: {query['day']} · "
+                        f"Time: {st.session_state.booking_slot}"
+                    )
+
+                    with st.form(
+                        "student_booking_form",
+                        clear_on_submit=False,
+                    ):
+                        name = st.text_input(
+                            "Requestor name *",
+                            placeholder="Enter full name",
+                        )
+
+                        email = st.text_input(
+                            "Requestor email *",
+                            placeholder="Enter email",
+                        )
+
+                        title = st.text_input(
+                            "Booking title *",
+                    
+                        )
+
+                        description = st.text_area(
+                            "Description *",
+                            
+                            height=120,
+                        )
+
+                        confirm_booking = st.form_submit_button(
+                            "Confirm booking",
                             type="primary",
                             use_container_width=True,
+                        )
+
+                    if confirm_booking:
+                        name = name.strip()
+                        email = email.strip()
+                        title = title.strip()
+                        description = description.strip()
+
+                        if not all(
+                            [
+                                name,
+                                email,
+                                title,
+                                description,
+                            ]
                         ):
+                            st.error(
+                                "All fields are required. "
+                                "Please complete every field."
+                            )
+
+                        elif not re.fullmatch(
+                            r"[^@\s]+@[^@\s]+\.[^@\s]+",
+                            email,
+                        ):
+                            st.error(
+                                "Please enter a valid email address."
+                            )
+
+                        else:
                             try:
-                                st.success(
-                                    book_room(
-                                        room_id,
-                                        query["day"],
-                                        query["slot"],
-                                    )
+                                confirmation = book_room(
+                                    room_id,
+                                    query["day"],
+                                    st.session_state.booking_slot,
+                                    name,
+                                    email,
+                                    title,
+                                    description,
                                 )
+
+                                st.session_state.show_booking_form = False
+                                st.session_state.booking_room_id = None
+                                st.session_state.booking_slot = None
 
                                 (
                                     st.session_state.meta,
@@ -393,10 +480,24 @@ if st.session_state.query:
                                     query["preferred"],
                                 )
 
-                                st.rerun()
+                                st.success(confirmation)
+                                st.success(
+                                    f"Booking details submitted by {name}."
+                                )
 
                             except RuntimeError as error:
-                                st.error(str(error))
+                                st.error(str(error))                
+
+                with left:
+                    if query["slot"] != "Any available time":
+                        if st.button(
+                            "Book Room",
+                            type="primary",
+                            use_container_width=True,
+                        ):
+                            st.session_state.show_booking_form = True
+                            st.session_state.booking_room_id = room_id
+                            st.session_state.booking_slot = query["slot"]
 
                     else:
                         st.info(
@@ -443,25 +544,14 @@ if st.session_state.query:
                                 if item["status"] == "Available":
                                     if st.button(
                                         "Book slot",
-                                        key=(
-                                            f"book_{room_id}_"
-                                            f"{item['slot']}"
-                                        ),
+                                        key=f"book_{room_id}_{item['slot']}",
                                         use_container_width=True,
                                     ):
-                                        try:
-                                            st.success(
-                                                book_room(
-                                                    room_id,
-                                                    query["day"],
-                                                    item["slot"],
-                                                )
-                                            )
+                                        st.session_state.show_booking_form = True
+                                        st.session_state.booking_room_id = room_id
+                                        st.session_state.booking_slot = item["slot"]
 
-                                            st.rerun()
-
-                                        except RuntimeError as error:
-                                            st.error(str(error))
+                                        st.rerun()
 
                                 else:
                                     st.button(

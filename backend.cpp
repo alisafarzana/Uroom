@@ -15,33 +15,92 @@
 using namespace std;
 
 struct Room { string id, name, location; int capacity; };
-struct Ranked { double score; Room room; int extra, distance, walk; vector<string> slots; };
+struct Ranked { int locationPriority; double score; Room room; int extra, distance, walk; vector<string> slots; };
 struct MinCmp {
-    bool operator()(const Ranked& a, const Ranked& b) const {
-        return a.score == b.score ? a.room.id > b.room.id : a.score > b.score;
+    bool operator()(
+        const Ranked& a,
+        const Ranked& b
+    ) const {
+        // Location priority is considered first.
+        if (a.locationPriority != b.locationPriority) {
+            return a.locationPriority > b.locationPriority;
+        }
+
+        // Within the same location, use the existing score.
+        if (a.score != b.score) {
+            return a.score > b.score;
+        }
+
+        return a.room.id > b.room.id;
     }
 };
 
-std::vector<std::string> splitCsvLine(
-    const std::string& line
+vector<string> splitCsvLine(
+    const string& line
 ) {
-    std::vector<std::string> columns;
-    std::stringstream stream(line);
-    std::string value;
+    vector<string> columns;
+    string value;
+    bool insideQuotes = false;
 
-    while (std::getline(stream, value, ',')) {
-        // Remove Windows carriage return.
-        if (
-            !value.empty()
-            && value.back() == '\r'
+    for (size_t i = 0; i < line.size(); ++i) {
+        char character = line[i];
+
+        if (character == '"') {
+            if (
+                insideQuotes
+                && i + 1 < line.size()
+                && line[i + 1] == '"'
+            ) {
+                value += '"';
+                ++i;
+            } else {
+                insideQuotes = !insideQuotes;
+            }
+        } else if (
+            character == ','
+            && !insideQuotes
         ) {
-            value.pop_back();
+            columns.push_back(value);
+            value.clear();
+        } else if (character != '\r') {
+            value += character;
         }
-
-        columns.push_back(value);
     }
 
+    columns.push_back(value);
+
     return columns;
+}
+
+string csvEscape(const string& value) {
+    string escaped;
+    bool needsQuotes = false;
+
+    for (char character : value) {
+        if (
+            character == ','
+            || character == '"'
+            || character == '\n'
+            || character == '\r'
+        ) {
+            needsQuotes = true;
+        }
+
+        if (character == '"') {
+            escaped += "\"\"";
+        } else if (
+            character != '\n'
+            && character != '\r'
+        ) {
+            escaped += character;
+        }
+    }
+
+    if (needsQuotes) {
+        return "\"" + escaped + "\"";
+    }
+
+    return escaped;
 }
 
 struct BenchmarkPair {
@@ -80,6 +139,249 @@ vector<Room> rooms() {
     };
 }
 
+unordered_map<string, vector<string>> locationPriorityOrders() {
+    return {
+        {
+            "Information Resource Centre",
+            {
+                "Information Resource Centre",
+                "Chancellor Complex",
+                "Pocket D",
+                "Block B",
+                "Village 7",
+                "Village 1",
+                "Village 2",
+                "Village 3",
+                "Village 4",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 5"
+            }
+        },
+        {
+            "Chancellor Complex",
+            {
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Pocket D",
+                "Block B",
+                "Village 7",
+                "Village 1",
+                "Village 2",
+                "Village 3",
+                "Village 4",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 5"
+            }
+        },
+        {
+            "Pocket D",
+            {
+                "Pocket D",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Village 7",
+                "Village 1",
+                "Village 2",
+                "Village 3",
+                "Village 4",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 5"
+            }
+        },
+        {
+            "Block B",
+            {
+                "Block B",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Pocket D",
+                "Village 7",
+                "Village 1",
+                "Village 2",
+                "Village 3",
+                "Village 4",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 5"
+            }
+        },
+        {
+            "Village 7",
+            {
+                "Village 7",
+                "Block B",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Pocket D",
+                "Village 1",
+                "Village 2",
+                "Village 3",
+                "Village 4",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 5"
+            }
+        },
+        {
+            "Village 1",
+            {
+                "Village 1",
+                "Village 2",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 3",
+                "Village 4",
+                "Pocket D",
+                "Village 5",
+                "Village 7"
+            }
+        },
+        {
+            "Village 2",
+            {
+                "Village 2",
+                "Village 1",
+                "Nadi@UTP",
+                "Village 3",
+                "Village 4",
+                "Pocket D",
+                "Village 6",
+                "Village 5",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Village 7"
+            }
+        },
+        {
+            "Village 3",
+            {
+                "Village 3",
+                "Village 4",
+                "Pocket D",
+                "Village 5",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 2",
+                "Village 1",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Village 7"
+            }
+        },
+        {
+            "Village 4",
+            {
+                "Village 4",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 3",
+                "Pocket D",
+                "Village 5",
+                "Village 2",
+                "Village 1",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Village 7"
+            }
+        },
+        {
+            "Village 5",
+            {
+                "Village 5",
+                "Village 3",
+                "Pocket D",
+                "Village 4",
+                "Nadi@UTP",
+                "Village 6",
+                "Village 2",
+                "Village 1",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Village 7"
+            }
+        },
+        {
+            "Village 6",
+            {
+                "Village 6",
+                "Nadi@UTP",
+                "Village 4",
+                "Village 3",
+                "Village 2",
+                "Pocket D",
+                "Village 5",
+                "Village 1",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Village 7"
+            }
+        },
+        {
+            "Nadi@UTP",
+            {
+                "Nadi@UTP",
+                "Village 6",
+                "Village 4",
+                "Village 3",
+                "Village 2",
+                "Pocket D",
+                "Village 5",
+                "Village 1",
+                "Chancellor Complex",
+                "Information Resource Centre",
+                "Block B",
+                "Village 7"
+            }
+        }
+    };
+}
+
+int getLocationPriority(
+    const string& startingLocation,
+    const string& roomLocation
+) {
+    // No starting location: all locations have equal priority.
+    if (startingLocation.empty()) {
+        return 0;
+    }
+
+    static const auto orders = locationPriorityOrders();
+
+    auto orderIterator = orders.find(startingLocation);
+
+    if (orderIterator == orders.end()) {
+        return 999;
+    }
+
+    const vector<string>& order = orderIterator->second;
+
+    auto locationIterator = find(
+        order.begin(),
+        order.end(),
+        roomLocation
+    );
+
+    if (locationIterator == order.end()) {
+        return 999;
+    }
+
+    return static_cast<int>(
+        distance(order.begin(), locationIterator)
+    );
+}
+
 vector<string> split(const string& s, char delimiter) {
     vector<string> values; string item; stringstream stream(s);
     while (getline(stream, item, delimiter)) values.push_back(item);
@@ -116,13 +418,10 @@ unsigned long long stableHash(const string& value) {
 }
 
 unordered_set<string> savedBookings(const string& filePath) {
-    unordered_set<string> saved;
-    ifstream file(filePath);
-    string line;
-    getline(file, line);
+    unordered_set<string> saved; ifstream file(filePath); string line;
     while (getline(file, line)) {
-        auto parts = split(line, ',');
-        if (parts.size() >= 3) saved.insert(parts[0] + "|" + parts[1] + "|" + parts[2]);
+        auto parts = splitCsvLine(line);
+        if (parts.size() >= 3 && parts[0] != "room_id") saved.insert(parts[0] + "|" + parts[1] + "|" + parts[2]);
     }
     return saved;
 }
@@ -200,7 +499,8 @@ void runSearch(char** argv) {
         int distance = distanceBetween(distanceMap, start, room.location);
         int walk = distance < 0 ? -1 : (int)ceil(distance / 80.0);
         double score = extra * 2 + (distance < 0 ? 0 : distance / 100.0) - 0.5 * min<size_t>(free.size(), 4);
-        heap.push({score, room, extra, distance, walk, free});
+        int locationPriority = getLocationPriority(start,room.location);
+        heap.push({locationPriority, score, room, extra, distance, walk, free});
     }
 
     cout << "META|" << candidates.size() << "|" << allRooms.size() << "\n";
@@ -230,14 +530,24 @@ void runSchedule(char** argv) {
 }
 
 void runBook(char** argv) {
-    string id = argv[2], day = argv[3], selected = argv[4], file = argv[5];
-    auto allRooms = rooms(); auto saved = savedBookings(file);
-    auto iterator = find_if(allRooms.begin(), allRooms.end(), [&](const Room& room){ return room.id == id; });
+    string id = argv[2], day = argv[3], selected = argv[4], filePath = argv[5];
+    string name = argv[6], email = argv[7], title = argv[8], description = argv[9];
+    auto allRooms = rooms(); auto saved = savedBookings(filePath);
+    auto iterator = find_if(allRooms.begin(), allRooms.end(), [&](const Room& room) { return room.id == id; });
     if (iterator == allRooms.end()) throw runtime_error("Room not found.");
     if (!contains(slots(*iterator), selected)) throw runtime_error("That slot is not offered for this facility.");
     if (!contains(freeSlots(*iterator, day, saved), selected)) throw runtime_error("That slot is no longer available.");
-    ofstream fileOut(file, ios::app);
-    fileOut << id << "," << day << "," << selected << "\n";
+    if (name.empty() || email.empty() || title.empty() || description.empty()) throw runtime_error("All student booking details are required.");
+    ifstream existingFile(filePath);
+    bool needsHeader = !existingFile.good() || existingFile.peek() == ifstream::traits_type::eof();
+    existingFile.close();
+    ofstream fileOut(filePath, ios::app);
+    if (!fileOut.is_open()) throw runtime_error("Unable to open bookings.csv.");
+    if (needsHeader) fileOut << "room_id,booking_date,time_slot,name,email,title,description\n";
+    fileOut << csvEscape(id) << "," << csvEscape(day) << "," << csvEscape(selected) << ","
+            << csvEscape(name) << "," << csvEscape(email) << "," << csvEscape(title) << ","
+            << csvEscape(description) << "\n";
+
     cout << "OK|" << iterator->name << " booked for " << day << ", " << label(selected) << ".\n";
 }
 
@@ -459,7 +769,7 @@ int main(int argc, char** argv) {
         string mode = argv[1];
         if (mode == "search" && argc >= 8) runSearch(argv);
         else if (mode == "schedule" && argc >= 5) runSchedule(argv);
-        else if (mode == "book" && argc >= 6) runBook(argv);
+        else if (mode == "book" && argc >= 10) runBook(argv);
         else if (mode == "benchmark") {
             if (argc < 3) {
                 throw runtime_error(
