@@ -11,11 +11,57 @@
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
+#include <initializer_list>
+#include <utility>
 using namespace std;
 
+template <typename T, size_t Capacity>
+class FixedList {
+private:
+    T items[Capacity];
+    size_t count = 0;
+
+public:
+    using value_type = T;
+    using reference = T&;
+    using const_reference = const T&;
+    using size_type = size_t;
+
+    FixedList() = default;
+
+    FixedList(initializer_list<T> values) {
+        for (const T& value : values) push_back(value);
+    }
+
+    void push_back(const T& value) {
+        if (count >= Capacity) throw runtime_error("FixedList capacity exceeded.");
+        items[count++] = value;
+    }
+
+    void push_back(T&& value) {
+        if (count >= Capacity) throw runtime_error("FixedList capacity exceeded.");
+        items[count++] = move(value);
+    }
+
+    void pop_back() {
+        if (count == 0) throw runtime_error("Cannot remove from an empty FixedList.");
+        --count;
+    }
+
+    reference front() { return items[0]; }
+    const_reference front() const { return items[0]; }
+    reference operator[](size_t index) { return items[index]; }
+    const_reference operator[](size_t index) const { return items[index]; }
+    T* begin() { return items; }
+    const T* begin() const { return items; }
+    T* end() { return items + count; }
+    const T* end() const { return items + count; }
+    size_t size() const { return count; }
+    bool empty() const { return count == 0; }
+};
+
 struct Room { string id, name, location; int capacity; };
-struct Ranked { int locationPriority; double score; Room room; int extra, distance, walk; vector<string> slots; };
+struct Ranked { int locationPriority; double score; Room room; int extra, distance, walk; FixedList<string, 8> slots; };
 struct MinCmp {
     bool operator()(
         const Ranked& a,
@@ -35,10 +81,10 @@ struct MinCmp {
     }
 };
 
-vector<string> splitCsvLine(
+FixedList<string, 64> splitCsvLine(
     const string& line
 ) {
-    vector<string> columns;
+    FixedList<string, 64> columns;
     string value;
     bool insideQuotes = false;
 
@@ -124,7 +170,7 @@ struct BenchmarkPair {
     bool hasOptimized = false;
 };
 
-vector<Room> rooms() {
+FixedList<Room, 14> rooms() {
     return {
         {"R001","Vortex 1","Nadi@UTP",20}, {"R002","Vortex 2","Nadi@UTP",12},
         {"R003","Vault 1","Nadi@UTP",30}, {"R004","Vault 2","Nadi@UTP",20},
@@ -139,7 +185,7 @@ vector<Room> rooms() {
     };
 }
 
-unordered_map<string, vector<string>> locationPriorityOrders() {
+unordered_map<string, FixedList<string, 12>> locationPriorityOrders() {
     return {
         {
             "Information Resource Centre",
@@ -365,7 +411,7 @@ int getLocationPriority(
         return 999;
     }
 
-    const vector<string>& order = orderIterator->second;
+    const FixedList<string, 12>& order = orderIterator->second;
 
     auto locationIterator = find(
         order.begin(),
@@ -382,13 +428,14 @@ int getLocationPriority(
     );
 }
 
-vector<string> split(const string& s, char delimiter) {
-    vector<string> values; string item; stringstream stream(s);
+FixedList<string, 64> split(const string& s, char delimiter) {
+    FixedList<string, 64> values; string item; stringstream stream(s);
     while (getline(stream, item, delimiter)) values.push_back(item);
     return values;
 }
 
-string join(const vector<string>& values, const string& separator) {
+template <size_t Capacity>
+string join(const FixedList<string, Capacity>& values, const string& separator) {
     string output;
     for (size_t i = 0; i < values.size(); ++i) {
         if (i) output += separator;
@@ -397,14 +444,15 @@ string join(const vector<string>& values, const string& separator) {
     return output;
 }
 
-vector<string> slots(const Room& room) {
+FixedList<string, 8> slots(const Room& room) {
     if (room.location == "Information Resource Centre") {
         return {"10:00-12:00","12:00-14:00","14:00-16:00","16:00-18:00","18:00-20:00","20:00-22:00"};
     }
     return {"08:00-10:00","10:00-12:00","12:00-14:00","14:00-16:00","16:00-18:00","18:00-20:00","20:00-22:00"};
 }
 
-bool contains(const vector<string>& values, const string& target) {
+template <size_t Capacity>
+bool contains(const FixedList<string, Capacity>& values, const string& target) {
     return find(values.begin(), values.end(), target) != values.end();
 }
 
@@ -426,7 +474,7 @@ unordered_set<string> savedBookings(const string& filePath) {
     return saved;
 }
 
-vector<string> freeSlots(const Room& room, const string& day, const unordered_set<string>& saved) {
+FixedList<string, 8> freeSlots(const Room& room, const string& day, const unordered_set<string>& saved) {
     auto all = slots(room);
     unordered_set<string> used;
     auto state = stableHash(room.id + "|" + day);
@@ -435,7 +483,7 @@ vector<string> freeSlots(const Room& room, const string& day, const unordered_se
         state = state * 6364136223846793005ULL + 1ULL;
         used.insert(all[state % all.size()]);
     }
-    vector<string> free;
+    FixedList<string, 8> free;
     for (const auto& slot : all) {
         if (!used.count(slot) && !saved.count(room.id + "|" + day + "|" + slot)) free.push_back(slot);
     }
@@ -457,7 +505,7 @@ string label(const string& slot) {
 
 unordered_map<string, int> distances() {
     unordered_map<string, int> map;
-    vector<tuple<string,string,int>> values = {
+    FixedList<tuple<string,string,int>, 10> values = {
         {"Chancellor Complex","Nadi@UTP",350},
         {"Chancellor Complex","Information Resource Centre",420},
         {"Chancellor Complex","Village 5",850},
@@ -486,10 +534,10 @@ void runSearch(char** argv) {
     int pax = stoi(argv[2]);
     string day = argv[3], wanted = argv[4], start = argv[5], preferred = argv[6], file = argv[7];
     auto allRooms = rooms(); auto saved = savedBookings(file); auto distanceMap = distances();
-    vector<Room> candidates;
+    FixedList<Room, 14> candidates;
     for (const auto& room : allRooms) if (preferred.empty() || room.location == preferred) candidates.push_back(room);
 
-    priority_queue<Ranked, vector<Ranked>, MinCmp> heap;
+    priority_queue<Ranked, FixedList<Ranked, 14>, MinCmp> heap;
     for (const auto& room : candidates) {
         if (room.capacity < pax) continue;
         auto free = freeSlots(room, day, saved);
@@ -507,7 +555,7 @@ void runSearch(char** argv) {
     int rank = 1;
     while (!heap.empty()) {
         auto result = heap.top(); heap.pop();
-        vector<string> labels;
+        FixedList<string, 3> labels;
         for (size_t i = 0; i < min<size_t>(3, result.slots.size()); ++i) labels.push_back(label(result.slots[i]));
         string available = wanted.empty() ? join(labels, ", ") + (result.slots.size() > 3 ? " +" : "") : label(wanted);
         cout << fixed << setprecision(2)
@@ -576,7 +624,7 @@ void runBenchmark(
             continue;
         }
 
-        vector<string> columns =
+        FixedList<string, 64> columns =
             splitCsvLine(line);
 
         /*
@@ -686,7 +734,7 @@ void runBenchmark(
 
     file.close();
 
-    vector<BenchmarkPair> completeComparisons;
+    FixedList<BenchmarkPair, 1000> completeComparisons;
 
     for (const auto& entry : comparisons) {
         const BenchmarkPair& comparison =
@@ -786,3 +834,4 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
