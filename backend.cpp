@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cmath>
 #include <map>
 #include <fstream>
 #include <iomanip>
@@ -8,7 +7,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <initializer_list>
@@ -60,27 +58,40 @@ public:
     bool empty() const { return count == 0; }
 };
 
+//room record
 struct Room { string id, name, location; int capacity; };
-struct Ranked { int locationPriority; double score; Room room; int extra, distance, walk; FixedList<string, 8> slots; };
+
+//rank scoring
+struct Ranked {
+    int distanceScore;
+    double score;
+    Room room;
+    int extra;
+    FixedList<string, 8> slots;
+};
+
+//minHeap comparator
 struct MinCmp {
     bool operator()(
         const Ranked& a,
         const Ranked& b
     ) const {
-        // Location priority is considered first.
-        if (a.locationPriority != b.locationPriority) {
-            return a.locationPriority > b.locationPriority;
+        //First priority: the location nearest to the selected starting location.
+        if (a.distanceScore != b.distanceScore) {
+            return a.distanceScore > b.distanceScore;
         }
 
-        // Within the same location, use the existing score.
+        // Second priority: the lowest total score within the same location rank.
         if (a.score != b.score) {
             return a.score > b.score;
         }
 
+        // Final tie-breaker: lower room ID comes first.
         return a.room.id > b.room.id;
     }
 };
 
+//CSV parsing
 FixedList<string, 64> splitCsvLine(
     const string& line
 ) {
@@ -149,6 +160,7 @@ string csvEscape(const string& value) {
     return escaped;
 }
 
+//graph
 struct BenchmarkPair {
     std::string testCaseId;
 
@@ -170,6 +182,7 @@ struct BenchmarkPair {
     bool hasOptimized = false;
 };
 
+//room records
 FixedList<Room, 14> rooms() {
     return {
         {"R001","Vortex 1","Nadi@UTP",20}, {"R002","Vortex 2","Nadi@UTP",12},
@@ -185,6 +198,7 @@ FixedList<Room, 14> rooms() {
     };
 }
 
+//HASH MAP for location priority orders
 unordered_map<string, FixedList<string, 12>> locationPriorityOrders() {
     return {
         {
@@ -394,11 +408,12 @@ unordered_map<string, FixedList<string, 12>> locationPriorityOrders() {
     };
 }
 
-int getLocationPriority(
+// distance score based on location priority orders
+int getDistanceScore(
     const string& startingLocation,
     const string& roomLocation
 ) {
-    // No starting location: all locations have equal priority.
+    // No starting location means distance should not affect the total score.
     if (startingLocation.empty()) {
         return 0;
     }
@@ -407,8 +422,9 @@ int getLocationPriority(
 
     auto orderIterator = orders.find(startingLocation);
 
+    //Unknown starting locations receive a score worse than all 12 known ranks.
     if (orderIterator == orders.end()) {
-        return 999;
+        return 13;
     }
 
     const FixedList<string, 12>& order = orderIterator->second;
@@ -419,13 +435,15 @@ int getLocationPriority(
         roomLocation
     );
 
+    // Unknown room locations also receive the worst fallback score.
     if (locationIterator == order.end()) {
-        return 999;
+        return 13;
     }
 
+    // Convert the zero-based list position to a user-friendly score from 1 to 12.
     return static_cast<int>(
         distance(order.begin(), locationIterator)
-    );
+    ) + 1; //index + 1 to convert to 1-based score
 }
 
 FixedList<string, 64> split(const string& s, char delimiter) {
@@ -444,6 +462,7 @@ string join(const FixedList<string, Capacity>& values, const string& separator) 
     return output;
 }
 
+
 FixedList<string, 8> slots(const Room& room) {
     if (room.location == "Information Resource Centre") {
         return {"10:00-12:00","12:00-14:00","14:00-16:00","16:00-18:00","18:00-20:00","20:00-22:00"};
@@ -456,6 +475,7 @@ bool contains(const FixedList<string, Capacity>& values, const string& target) {
     return find(values.begin(), values.end(), target) != values.end();
 }
 
+//hashing function for stable pseudo-randomness
 unsigned long long stableHash(const string& value) {
     unsigned long long hash = 1469598103934665603ULL;
     for (unsigned char character : value) {
@@ -465,6 +485,7 @@ unsigned long long stableHash(const string& value) {
     return hash;
 }
 
+//hash set of saved bookings from CSV file
 unordered_set<string> savedBookings(const string& filePath) {
     unordered_set<string> saved; ifstream file(filePath); string line;
     while (getline(file, line)) {
@@ -503,52 +524,34 @@ string label(const string& slot) {
     return formatTime(parts[0]) + "-" + formatTime(parts[1]);
 }
 
-unordered_map<string, int> distances() {
-    unordered_map<string, int> map;
-    FixedList<tuple<string,string,int>, 10> values = {
-        {"Chancellor Complex","Nadi@UTP",350},
-        {"Chancellor Complex","Information Resource Centre",420},
-        {"Chancellor Complex","Village 5",850},
-        {"Chancellor Complex","Block B",600},
-        {"Information Resource Centre","Nadi@UTP",510},
-        {"Information Resource Centre","Village 5",620},
-        {"Information Resource Centre","Block B",430},
-        {"Nadi@UTP","Village 5",480},
-        {"Nadi@UTP","Block B",390},
-        {"Village 5","Block B",570}
-    };
-    for (auto& [a,b,m] : values) {
-        map[a + "->" + b] = m; map[b + "->" + a] = m;
-        map[a + "->" + a] = 0; map[b + "->" + b] = 0;
-    }
-    return map;
-}
-
-int distanceBetween(const unordered_map<string,int>& map, const string& start, const string& destination) {
-    if (start.empty()) return -1;
-    auto iterator = map.find(start + "->" + destination);
-    return iterator == map.end() ? 1200 : iterator->second;
-}
-
 void runSearch(char** argv) {
     int pax = stoi(argv[2]);
     string day = argv[3], wanted = argv[4], start = argv[5], preferred = argv[6], file = argv[7];
-    auto allRooms = rooms(); auto saved = savedBookings(file); auto distanceMap = distances();
+    auto allRooms = rooms();
+    auto saved = savedBookings(file);
     FixedList<Room, 14> candidates;
     for (const auto& room : allRooms) if (preferred.empty() || room.location == preferred) candidates.push_back(room);
 
+    //priority queue keeps the best location priority and score at the top.
     priority_queue<Ranked, FixedList<Ranked, 14>, MinCmp> heap;
     for (const auto& room : candidates) {
         if (room.capacity < pax) continue;
         auto free = freeSlots(room, day, saved);
         if (!wanted.empty() && (!contains(slots(room), wanted) || !contains(free, wanted))) continue;
         if (wanted.empty() && free.empty()) continue;
+
+        //calculate capacity difference and distance score for ranking
         int extra = room.capacity - pax;
-        int distance = distanceBetween(distanceMap, start, room.location);
-        int walk = distance < 0 ? -1 : (int)ceil(distance / 80.0);
-        double score = extra * 2 + (distance < 0 ? 0 : distance / 100.0) - 0.5 * min<size_t>(free.size(), 4);
-        int locationPriority = getLocationPriority(start,room.location);
-        heap.push({locationPriority, score, room, extra, distance, walk, free});
+        int distanceScore = getDistanceScore(start, room.location);
+
+        // A lower distance score produces a lower and therefore better total score.
+        // Extra capacity increases the score, while more free slots slightly reduce it.
+        double score =
+            extra * 2
+            + distanceScore
+            - 0.5 * min<size_t>(free.size(), 4);
+
+        heap.push({distanceScore, score, room, extra, free});
     }
 
     cout << "META|" << candidates.size() << "|" << allRooms.size() << "\n";
@@ -561,7 +564,7 @@ void runSearch(char** argv) {
         cout << fixed << setprecision(2)
              << "RESULT|" << rank++ << "|" << result.room.id << "|" << result.room.name << "|"
              << result.room.location << "|" << result.room.capacity << "|" << result.extra << "|"
-             << result.distance << "|" << result.walk << "|" << available << "|" << result.score << "|"
+             << result.distanceScore << "|" << available << "|" << result.score << "|"
              << join(result.slots, ",") << "\n";
     }
 }
@@ -649,7 +652,7 @@ void runBenchmark(
         16 measurement_type
         */
 
-        if (columns.size() < 17) {
+        if (columns.size() < 14) {
             cerr
                 << "Skipped incomplete CSV row: "
                 << line
@@ -672,16 +675,16 @@ void runBenchmark(
                 stoi(columns[3]);
 
             int recordsExamined =
-                stoi(columns[11]);
+                stoi(columns[9]);
 
             double operations =
-                stod(columns[12]);
+                stod(columns[11]);
 
             double executionTime =
-                stod(columns[13]);
+                stod(columns[12]);
 
             double memoryUsage =
-                stod(columns[14]);
+                stod(columns[13]);
 
             if (approach == "Baseline") {
                 comparison.baselineOperations =

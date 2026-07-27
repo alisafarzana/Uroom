@@ -39,7 +39,7 @@ BOOKINGS_FILE = ROOT / "bookings.csv"
 
 COMPARISON_DATA = (
     ROOT
-    / "dataset_graph.csv"
+    / "dataset_graph_final.csv"
 )
 
 SLOTS = [
@@ -133,7 +133,7 @@ def search_rooms(pax: int, day: str, slot: str, start: str, preferred: str):
         parts = line.split("|")
         if parts[0] == "META":
             metadata = {"candidate": int(parts[1]), "total": int(parts[2])}
-        elif parts[0] == "RESULT":
+        elif parts[0] == "RESULT" and len(parts) >= 11:
             rows.append(
                 {
                     "Rank": int(parts[1]),
@@ -142,12 +142,10 @@ def search_rooms(pax: int, day: str, slot: str, start: str, preferred: str):
                     "Location": parts[4],
                     "Capacity": int(parts[5]),
                     "Extra seats": int(parts[6]),
-                    "Distance": "Not considered"
-                    if parts[7] == "-1"
-                    else f"{parts[7]} m ({parts[8]} min)",
-                    "Available time": parts[9],
-                    "Score": float(parts[10]),
-                    "_slots": parts[11].split(",") if parts[11] else [],
+                    "Distance score": int(parts[7]),
+                    "Available time": parts[8],
+                    "Score": float(parts[9]),
+                    "_slots": parts[10].split(",") if parts[10] else [],
                 }
             )
     return metadata, rows
@@ -326,7 +324,7 @@ if st.session_state.query:
         hidden_columns = {
             "Room ID",
             "Distance",
-            "Score",
+            "Distance score",
             "Extra seats"
         }
 
@@ -572,22 +570,18 @@ st.markdown(
     '<div class="eyebrow">Algorithm evaluation</div><div class="section">Improvement dashboard</div>',
     unsafe_allow_html=True,
 )
-m1, m2, m3 = st.columns(3)
+m1, m2 = st.columns(2)
 with m1:
     st.markdown(
-        '<div class="card red"><small>Baseline query</small><b>O(n)</b>Linear search checks all room records.</div>',
+        '<div class="card red"><small>Baseline</small><b>O(n²)</b>Linear search checks all room records.</div>',
         unsafe_allow_html=True,
     )
 with m2:
     st.markdown(
-        '<div class="card green"><small>Optimized query</small><b>O(k + r log k)</b>Hash Map lookup narrows candidates before Min Heap ranking.</div>',
+        '<div class="card green"><small>Optimized</small><b>O(n log n)</b>Hash Map lookup narrows candidates before Min Heap ranking.</div>',
         unsafe_allow_html=True,
     )
-with m3:
-    st.markdown(
-        '<div class="card grey"><small>Space complexity</small><b>O(n) vs O(n)</b>Optimized storage has a larger constant for indexes.</div>',
-        unsafe_allow_html=True,
-    )
+
 
 if ready:
     try:
