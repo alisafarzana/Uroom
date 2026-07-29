@@ -5,6 +5,7 @@
 - `app.py` — Streamlit user interface
 - `backend.cpp` — C++ filtering, availability, distance lookup, booking and Min Heap ranking
 - `bookings.csv` — booking records
+- `dataset_graph_final.csv` — dataset of baseline and optimized algorithm test
 - `requirements.txt` — Python packages
 - `run_app.bat` — compiles C++ and starts Streamlit
 - `build_backend.bat` — compiles only the C++ file
@@ -38,6 +39,6 @@ http://localhost:8501
 ## Booking rules
 
 - Each booking is two hours.
-- IRC offers booking slots from 10 AM to 10 PM in this prototype.
+- IRC offers booking slots from 10 AM to 10 PM
 - Preferred time, starting location and preferred location are optional.
 - Results appear in one ranked list.

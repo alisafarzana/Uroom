@@ -175,9 +175,6 @@ struct BenchmarkPair {
     double baselineMemory = 0.0;
     double optimizedMemory = 0.0;
 
-    int baselineRecordsExamined = 0;
-    int optimizedRecordsExamined = 0;
-
     bool hasBaseline = false;
     bool hasOptimized = false;
 };
@@ -644,12 +641,12 @@ void runBenchmark(
         8  preferred_location
         9  candidate_rooms
         10 matching_rooms
-        11 records_examined
-        12 estimated_operations
-        13 execution_time_ms
-        14 memory_usage_kb
-        15 returned_rooms
-        16 measurement_type
+        11 estimated_operations
+        12 execution_time_ms
+        13 memory_usage_kb
+
+        Additional CSV columns may remain after column 13,
+        but they are not required by the dashboard.
         */
 
         if (columns.size() < 14) {
@@ -674,9 +671,6 @@ void runBenchmark(
             comparison.datasetSize =
                 stoi(columns[3]);
 
-            int recordsExamined =
-                stoi(columns[9]);
-
             double operations =
                 stod(columns[11]);
 
@@ -696,9 +690,6 @@ void runBenchmark(
                 comparison.baselineMemory =
                     memoryUsage;
 
-                comparison.baselineRecordsExamined =
-                    recordsExamined;
-
                 comparison.hasBaseline = true;
             }
 
@@ -711,9 +702,6 @@ void runBenchmark(
 
                 comparison.optimizedMemory =
                     memoryUsage;
-
-                comparison.optimizedRecordsExamined =
-                    recordsExamined;
 
                 comparison.hasOptimized = true;
             }
@@ -803,12 +791,6 @@ void runBenchmark(
             << "|"
 
             << comparison.optimizedMemory
-            << "|"
-
-            << comparison.baselineRecordsExamined
-            << "|"
-
-            << comparison.optimizedRecordsExamined
 
             << "\n";
     }
@@ -837,4 +819,3 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
-

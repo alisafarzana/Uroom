@@ -186,7 +186,7 @@ def get_benchmark() -> pd.DataFrame:
     for line in lines:
         parts = line.split("|")
 
-        if parts[0] == "BENCH" and len(parts) >= 10:
+        if parts[0] == "BENCH" and len(parts) >= 8:
             rows.append(
                 {
                     "Dataset size": int(parts[1]),
@@ -615,33 +615,17 @@ if ready:
                 use_container_width=True,
             )
 
-        chart3, chart4 = st.columns(2)
+        st.subheader("Memory usage comparison")
 
-        with chart3:
-            st.subheader("Memory usage comparison")
-
-            st.bar_chart(
-                benchmark[
-                    [
-                        "Baseline memory",
-                        "Optimized memory",
-                    ]
-                ],
-                use_container_width=True,
-            )
-
-        with chart4:
-            st.subheader("Records examined comparison")
-
-            st.bar_chart(
-                benchmark[
-                    [
-                        "Baseline records examined",
-                        "Optimized records examined",
-                    ]
-                ],
-                use_container_width=True,
-            )
+        st.bar_chart(
+            benchmark[
+                [
+                    "Baseline memory",
+                    "Optimized memory",
+                ]
+            ],
+            use_container_width=True,
+        )
 
     except RuntimeError as error:
         st.error(str(error))
